@@ -1,6 +1,7 @@
 ```{r}
 library(dplyr)
 library(ggplot2)
+library(ggthemes)
 library(glue)
 library(httr)
 library(purrr)
@@ -9,6 +10,7 @@ library(tibble)
 library(tidyr)
 
 .font <- "Noto Sans"
+sysfonts::font_add_google(.font, .font)
 theme_set(theme_bw(base_size = 14, base_family = .font))
 theme_update(panel.grid = element_blank(),
              strip.background = element_blank(),
@@ -17,6 +19,8 @@ theme_update(panel.grid = element_blank(),
              axis.line = element_line(),
              strip.text = element_text(face = "bold"))
 ```
+
+# Article fetching and processing
 
 ```{r}
 # call of pubpub API for OECS
@@ -117,6 +121,7 @@ get_pub_crosslinks <- \(text_nodes) {
 # get links of each pub
 pub_crosslinks <- map(pub_text_nodes, get_pub_crosslinks)
 
+# identify incorrect crosslink hrefs
 check_crosslink <- \(crosslink) {
   href <- if (is.null(crosslink$href)) "" else crosslink$href
   article <- crosslink$text
@@ -133,14 +138,18 @@ check_crosslink <- \(crosslink) {
 }
 pub_crosslink_checks <- pub_crosslinks |> compact() |>
   map(\(crosslinks) crosslinks |> map_df(check_crosslink))
-
 bad_crosslinks <- pub_crosslink_checks |> compact() |>
   bind_rows(.id = "from") |> arrange(from)
 ```
 
+# Text networks
+
+https://sicss.io/2018/materials/day3-text-analysis/text-networks/rmarkdown/SICSS_Text_Networks.html
+
 ```{r}
 library(textnets)
 library(tidygraph)
+library(lsa)
 source("VisTextNet.R")
 
 # prep text for network by tokenizing / counting lemmas
@@ -161,9 +170,13 @@ ggraph(pub_plot, layout = "stress") +
 ggsave("plots/oecs_textnet.png", width = 8, height = 3)
 ```
 
+# GloVe embeddings
+
+https://nlp.stanford.edu/projects/glove/
+
 ```{r}
 # read in cached glove vectors
-glove <- data.table::fread(file = "glove.6B.50d.txt", sep = " ", quote = "")
+glove <- data.table::fread(file = "resources/glove.6B.50d.txt", sep = " ", quote = "")
 
 # combine pub text with vectors
 pub_lemmas_glove <- prepped_pubs |>
@@ -191,17 +204,22 @@ ggplot(pubs_similarity, aes(article1, article2)) +
 ggsave("plots/oecs_heatmap.png", width = 10, height = 10)
 
 # create graph from similarities
-min_edge_weight <- 0.8
+min_edge_weight <- 0.85
 pubs_similarity_graph <- pubs_similarity |>
   filter(article1 != article2) |>
   filter(similarity_norm >= min_edge_weight) |>
-  as_tbl_graph(directed = FALSE)
+  as_tbl_graph(directed = FALSE) |>
+  mutate(group = factor(group_louvain())) |>
+  mutate(centrality = centrality_alpha())
 
 # plot similarities graph
-ggraph(pubs_similarity_graph, layout = "stress") +
-  geom_node_point() +
+pubs_layout <- layout_with_kk(pubs_similarity_graph)
+ggraph(pubs_similarity_graph, layout = pubs_layout) +
   geom_edge_link(aes(edge_alpha = similarity_norm), show.legend = FALSE) +
-  geom_node_text(aes(label = name), repel = TRUE, size = 3, family = .font)
+  geom_node_point(aes(color = group, size = centrality), show.legend = FALSE) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3, family = .font) +
+  scale_colour_ptol(guide = "none")
+ggsave("plots/oecs_network_glove.png", width = 10, height = 8)
 
 # dimensionality reduction on similarities -- SVD
 pubs_svd <- pubs_mat |> t() |> irlba(nv = 2)
