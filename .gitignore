@@ -1,0 +1,6 @@
+.Renviron
+.DS_Store
+.Rproj.user
+
+*udpipe
+glove*

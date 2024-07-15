@@ -1,0 +1,224 @@
+```{r}
+library(dplyr)
+library(ggplot2)
+library(glue)
+library(httr)
+library(purrr)
+library(stringr)
+library(tibble)
+library(tidyr)
+
+.font <- "Noto Sans"
+theme_set(theme_bw(base_size = 14, base_family = .font))
+theme_update(panel.grid = element_blank(),
+             strip.background = element_blank(),
+             legend.key = element_blank(),
+             panel.border = element_blank(),
+             axis.line = element_line(),
+             strip.text = element_text(face = "bold"))
+```
+
+```{r}
+# call of pubpub API for OECS
+oecs_request <- \(verb, endpoint, ...) {
+  url <- str_c("https:/oecs.mit.edu/api/", endpoint)
+  VERB(verb, url, content_type("application/json"), accept("application/json"),
+       encode = "json", ...)
+}
+
+# authenticate
+pw <- Sys.getenv("OECS_PASSWORD")
+creds <- list(email = "mika.br@gmail.com", password = pw)
+login <- oecs_request("POST", "login", body = creds)
+# content(login, "text")
+
+# get all pubs in OECS collection
+pubs_query <- list(collectionId = "9dd2a47d-4a84-4126-9135-50a6383c26a9",
+                   communityId = "e2759450-b8e2-433a-a70d-45aff0f75d45",
+                   limit = 100)
+pubs_req <- oecs_request("GET", "collectionPubs", query = pubs_query)
+pubs <- content(pubs_req, "parsed") |> transpose()
+
+# get each pub
+get_pub <- \(pub_id) {
+  pub_req <- oecs_request("GET", glue("pubs/{pub_id}"))
+  pub_req |> content("parsed")
+}
+pubs <- map(pub_ids, get_pub)
+
+# get pub slugs
+pub_slugs <- map(pubs, \(pub) pub |> pluck("slug"))
+
+# get content of each pub
+pub_ids <- set_names(pubs$id, pubs$title)
+get_pub_content <- \(pub_id) {
+  pub_req <- oecs_request("GET", glue("pubs/{pub_id}/text"))
+  pub_req |> content("parsed")
+}
+pub_contents <- map(pubs, get_pub_content)
+
+# transform a pub's content to only text nodes
+get_pub_text_nodes <- \(pub) {
+  
+  pub_content <- pub |> pluck("content")
+  # remove any end matter
+  end_ids <- c("references", "further-reading")
+  end <- pub_content |> map_lgl(\(pc) pc$type == "heading" &
+                                  is.element(pc$attrs$id, end_ids))
+  end_start <- if (any(end)) end |> which() |> min() else length(pub_content)
+  pre_end <- pub_content[seq_len(end_start - 1)]
+  
+  # filter to paragraph nodes, get their content
+  paragraphs <- pre_end |> keep(\(pc) pc$type == "paragraph") |>
+    map(\(p) p$content) |> compact()
+  
+  # flatten node tree to one remaining nesting level
+  flattener <- map(seq_along(pluck_depth(paragraphs) - 1), \(i) list_flatten) |>
+    reduce(compose)
+  nodes <- flattener(paragraphs)
+  
+  # filter to text nodes
+  nodes |> keep(\(node) node$type == "text")
+}
+
+# get text nodes of each pub
+pub_text_nodes <- map(pub_contents, get_pub_text_nodes)
+
+# transform pub text nodes to single string
+get_pub_text <- \(text_nodes) {
+  
+  # remove links/markup
+  nodes <- text_nodes |> keep(
+    \(node) !any(is.element(c("link", "em"), unlist(node$marks)))
+  ) |> compact()
+  
+  # get node text, combine
+  text <- nodes |> transpose() |> pluck("text")
+  text |> paste(collapse = "") |> str_remove_all(" \\([; ]*\\)")
+}
+
+# get text string of each pub
+pub_text <- map_chr(pub_text_nodes, get_pub_text)
+
+# transform pub text nodes to list of links
+get_pub_crosslinks <- \(text_nodes) {
+  
+  # filter to only links
+  nodes <- text_nodes |> keep(
+    \(node) is.element("link", unlist(node$marks))
+  ) |> compact()
+  
+  # get text and href of each link
+  nodes |>
+    map(\(node) list(href = node |> pluck("marks", 1, "attrs", "href"),
+                     text = node |> pluck("text")))
+}
+
+# get links of each pub
+pub_crosslinks <- map(pub_text_nodes, get_pub_crosslinks)
+
+check_crosslink <- \(crosslink) {
+  href <- if (is.null(crosslink$href)) "" else crosslink$href
+  article <- crosslink$text
+  
+  # ignore external/section hrefs
+  if (href != "" &&
+      (str_detect(href, "#.*$") | !str_detect(href, "oecs"))) return(NULL)
+  
+  # check article exists and its slug is right
+  slug <- href |> str_extract("[A-z0-9]+$")
+  good_slug <- article %in% names(pub_slugs) &&
+    !is.na(slug) && slug == pub_slugs[[article]]
+  if (!good_slug) return(tibble(to = article, href = href))
+}
+pub_crosslink_checks <- pub_crosslinks |> compact() |>
+  map(\(crosslinks) crosslinks |> map_df(check_crosslink))
+
+bad_crosslinks <- pub_crosslink_checks |> compact() |>
+  bind_rows(.id = "from") |> arrange(from)
+```
+
+```{r}
+library(textnets)
+library(tidygraph)
+source("VisTextNet.R")
+
+# prep text for network by tokenizing / counting lemmas
+prepped_pubs <- PrepText(enframe(pub_text, name = "article", value = "text"),
+                         groupvar = "article", textvar = "text",
+                         node_type = "groups", tokenizer = "words", pos = "nouns",
+                         remove_stop_words = TRUE, remove_numbers = TRUE)
+
+# create network
+pubs_network <- CreateTextnet(prepped_pubs)
+
+# plot network
+pub_plot <- VisTextNet(pubs_network, alpha = 0.1)
+ggraph(pub_plot, layout = "stress") +
+  geom_node_point(color = V(pub_plot)$modularity) +
+  geom_edge_link(aes(edge_alpha = weight), show.legend = FALSE) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3, family = .font)
+ggsave("plots/oecs_textnet.png", width = 8, height = 3)
+```
+
+```{r}
+# read in cached glove vectors
+glove <- data.table::fread(file = "glove.6B.50d.txt", sep = " ", quote = "")
+
+# combine pub text with vectors
+pub_lemmas_glove <- prepped_pubs |>
+  ungroup() |>
+  inner_join(glove, by = c("lemma" = "V1"))
+
+# take mean of vectors for each pub
+pubs_glove <- pub_lemmas_glove |>
+  group_by(article) |>
+  summarise(across(starts_with("V"), mean))
+
+# get pairwise similarity between pub vectors
+pubs_mat <- pubs_glove |> column_to_rownames("article") |> t()
+pubs_cosine <- cosine(pubs_mat)
+pubs_similarity <- pubs_cosine |> as_tibble(rownames = "article1") |>
+  pivot_longer(-article1, names_to = "article2", values_to = "similarity") |>
+  mutate(similarity_norm = (similarity - min(similarity)) /
+           (max(similarity) - min(similarity)))
+
+# plot similarities as heatmap
+ggplot(pubs_similarity, aes(article1, article2)) +
+  coord_equal() +
+  geom_tile(aes(fill = similarity)) +
+  scale_fill_viridis()
+ggsave("plots/oecs_heatmap.png", width = 10, height = 10)
+
+# create graph from similarities
+min_edge_weight <- 0.8
+pubs_similarity_graph <- pubs_similarity |>
+  filter(article1 != article2) |>
+  filter(similarity_norm >= min_edge_weight) |>
+  as_tbl_graph(directed = FALSE)
+
+# plot similarities graph
+ggraph(pubs_similarity_graph, layout = "stress") +
+  geom_node_point() +
+  geom_edge_link(aes(edge_alpha = similarity_norm), show.legend = FALSE) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3, family = .font)
+
+# dimensionality reduction on similarities -- SVD
+pubs_svd <- pubs_mat |> t() |> irlba(nv = 2)
+pubs_dims <- pubs_svd$u |> as_tibble() |> mutate(article = colnames(pubs_mat))
+
+# plot SVD
+ggplot(pubs_dims, aes(x = V1, y = V2, label = article)) +
+  geom_text()
+
+# dimensionality reduction on similarities -- PCA
+pubs_pca <- pubs_mat |> prcomp()
+pubs_loadings <- pubs_pca$rotation |> as_tibble() |> select(PC1, PC2) |>
+  mutate(article = colnames(pubs_mat))
+
+# plot PCA
+ggplot(pubs_loadings, aes(x = PC1, y = PC2, label = article)) +
+  geom_text(family = .font)
+ggsave("plots/oecs_pca.png", width = 12, height = 9)
+```
+
