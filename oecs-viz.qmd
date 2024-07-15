@@ -9,6 +9,11 @@ library(stringr)
 library(tibble)
 library(tidyr)
 
+library(textnets)
+library(tidygraph)
+library(lsa)
+source("VisTextNet.R")
+
 .font <- "Noto Sans"
 sysfonts::font_add_google(.font, .font)
 theme_set(theme_bw(base_size = 14, base_family = .font))
@@ -142,16 +147,36 @@ bad_crosslinks <- pub_crosslink_checks |> compact() |>
   bind_rows(.id = "from") |> arrange(from)
 ```
 
+# Crosslink-based network
+
+```{r}
+crosslink_data <- pub_crosslinks |> compact() |>
+  map(\(crosslinks) crosslinks |>
+        discard(\(crosslink) is.null(crosslink$href) ||
+                  !str_detect(crosslink$href, "oecs") ||
+                  str_detect(crosslink$href, "#")) |>
+        transpose() |> pluck("text") |> unlist()) |>
+  enframe(name = "article1", value = "article2") |>
+  unnest(article2) |>
+  filter(article1 != article2)
+
+crosslink_graph <- as_tbl_graph(crosslink_data, directed = FALSE) |>
+  mutate(group = factor(group_louvain())) |>
+  mutate(centrality = centrality_alpha())
+
+ggraph(crosslink_graph) +
+  geom_edge_link() +
+  geom_node_point(aes(color = group, size = centrality), show.legend = FALSE) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3, family = .font) +
+  scale_colour_ptol(guide = "none")
+ggsave("plots/oecs_network_links.png", width = 10, height = 8)
+```
+
 # Text networks
 
 https://sicss.io/2018/materials/day3-text-analysis/text-networks/rmarkdown/SICSS_Text_Networks.html
 
 ```{r}
-library(textnets)
-library(tidygraph)
-library(lsa)
-source("VisTextNet.R")
-
 # prep text for network by tokenizing / counting lemmas
 prepped_pubs <- PrepText(enframe(pub_text, name = "article", value = "text"),
                          groupvar = "article", textvar = "text",
@@ -214,7 +239,7 @@ pubs_similarity_graph <- pubs_similarity |>
 
 # plot similarities graph
 pubs_layout <- layout_with_kk(pubs_similarity_graph)
-ggraph(pubs_similarity_graph, layout = pubs_layout) +
+ggraph(pubs_similarity_graph, layout = pubs_layout, weights = similarity_norm) +
   geom_edge_link(aes(edge_alpha = similarity_norm), show.legend = FALSE) +
   geom_node_point(aes(color = group, size = centrality), show.legend = FALSE) +
   geom_node_text(aes(label = name), repel = TRUE, size = 3, family = .font) +
