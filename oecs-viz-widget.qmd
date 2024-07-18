@@ -1,0 +1,52 @@
+---
+format:
+  html:
+    self-contained: true
+execute:
+  echo: false
+  message: false
+  warning: false
+  error: false
+---
+
+```{r}
+library(htmlwidgets)
+library(dplyr)
+library(tibble)
+library(igraph)
+library(networkD3)
+
+load("pub_data.RData")
+```
+
+```{r}
+nodes <- pubs_similarity_graph_combined |>
+  as_data_frame("vertices") |>
+  mutate(id = row_number() - 1) |>
+  remove_rownames() |>
+  left_join(slugs)
+
+node_ids <- nodes |> select(name, id)
+links <- pubs_similarity_graph_combined |>
+  as_data_frame("edges") |>
+  left_join(node_ids, by = c("from" = "name")) |>
+  left_join(node_ids, by = c("to" = "name")) |>
+  rename(source = id.x, target = id.y)
+
+nodeClick = 'window.open("https://oecs.mit.edu/pub/" + d.nodesize, "_blank");'
+
+forceNetwork(
+  Links = links, Nodes = nodes, Source = "source",
+  Target = "target", NodeID = "name",
+  Value = "similarity_norm",
+  Nodesize = "slug", # hack to make slug available
+  Group = "group",
+  linkWidth = JS("function(d) { return d.slug; }"),
+  radiusCalculation = JS("6"),
+  charge = -100,
+  zoom = TRUE,
+  colourScale = JS("d3.scaleOrdinal(d3.schemeCategory10);"),
+  opacity = .8, opacityNoHover = TRUE,
+  fontFamily = "Source Sans Pro", fontSize = 12,
+  clickAction = nodeClick)
+```
