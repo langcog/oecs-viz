@@ -16,7 +16,7 @@ library(tibble)
 library(igraph)
 library(networkD3)
 
-load("pub_data.RData")
+load("_processing/pub_data.RData")
 ```
 
 ```{r}
