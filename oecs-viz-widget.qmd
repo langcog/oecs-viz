@@ -46,7 +46,7 @@ forceNetwork(
   charge = -100,
   zoom = TRUE,
   colourScale = JS("d3.scaleOrdinal(d3.schemeCategory10);"),
-  opacity = .8, opacityNoHover = TRUE,
+  opacity = 1, opacityNoHover = TRUE,
   fontFamily = "Source Sans Pro", fontSize = 12,
   clickAction = nodeClick)
 ```
