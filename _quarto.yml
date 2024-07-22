@@ -1,3 +1,8 @@
 project:
   title: "oecs-viz"
   type: website
+
+format:
+  html:
+    theme: theme.scss
+    page-layout: full

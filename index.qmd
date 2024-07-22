@@ -2,6 +2,7 @@
 format:
   html:
     self-contained: true
+
 execute:
   echo: false
   message: false
@@ -44,9 +45,10 @@ forceNetwork(
   linkWidth = JS("function(d) { return d.slug; }"),
   radiusCalculation = JS("6"),
   charge = -100,
-  zoom = TRUE,
+  zoom = FALSE, bounded = TRUE,
   colourScale = JS("d3.scaleOrdinal(d3.schemeCategory10);"),
   opacity = 1, opacityNoHover = TRUE,
-  fontFamily = "Source Sans Pro", fontSize = 12,
+  fontFamily = "Noto Sans", fontSize = 12,
+  height = 1500, width = 1200,
   clickAction = nodeClick)
 ```
