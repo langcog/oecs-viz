@@ -42,11 +42,13 @@ login <- oecs_request("POST", "login", body = creds)
 # content(login, "text")
 
 # get all pubs in OECS collection
-pubs_query <- list(collectionId = "9dd2a47d-4a84-4126-9135-50a6383c26a9",
-                   communityId = "e2759450-b8e2-433a-a70d-45aff0f75d45",
-                   limit = 100)
-pubs_req <- oecs_request("GET", "collectionPubs", query = pubs_query)
-pubs <- content(pubs_req, "parsed") |> transpose()
+collection_query <- list(collectionId = "9dd2a47d-4a84-4126-9135-50a6383c26a9",
+                         communityId = "e2759450-b8e2-433a-a70d-45aff0f75d45",
+                         limit = 100)
+collection_req <- oecs_request("GET", "collectionPubs", query = collection_query)
+collection <- content(collection_req, "parsed") |> transpose()
+
+pub_ids <- set_names(collection$id, collection$title)
 
 # get each pub
 get_pub <- \(pub_id) {
@@ -59,12 +61,11 @@ pubs <- map(pub_ids, get_pub)
 pub_slugs <- map(pubs, \(pub) pub |> pluck("slug"))
 
 # get content of each pub
-pub_ids <- set_names(pubs$id, pubs$title)
 get_pub_content <- \(pub_id) {
   pub_req <- oecs_request("GET", glue("pubs/{pub_id}/text"))
   pub_req |> content("parsed")
 }
-pub_contents <- map(pubs, get_pub_content)
+pub_contents <- map(pub_ids, get_pub_content)
 
 # transform a pub's content to only text nodes
 get_pub_text_nodes <- \(pub) {
@@ -119,8 +120,11 @@ get_pub_crosslinks <- \(text_nodes) {
   
   # get text and href of each link
   nodes |>
-    map(\(node) list(href = node |> pluck("marks", 1, "attrs", "href"),
-                     text = node |> pluck("text")))
+    map(\(node) {
+      link <- node$marks |> keep(\(m) m$type == "link") |> flatten()
+      list(href = link |> pluck("attrs", "href"),
+           text = node |> pluck("text"))
+    })
 }
 
 # get links of each pub
@@ -137,14 +141,27 @@ check_crosslink <- \(crosslink) {
   
   # check article exists and its slug is right
   slug <- href |> str_extract("[A-z0-9]+$")
-  good_slug <- article %in% names(pub_slugs) &&
-    !is.na(slug) && slug == pub_slugs[[article]]
-  if (!good_slug) return(tibble(to = article, href = href))
+  target_slug <- pub_slugs[[article]]
+  good_slug <- !is.na(slug) && !is.null(target_slug) && slug == target_slug
+  # good_slug <- article %in% names(pub_slugs) &&
+  #   !is.na(slug) && slug == pub_slugs[[article]]
+  corrected <- if (is.null(target_slug)) NULL else paste0("https://oecs.mit.edu/pub/", target_slug)
+  if (!good_slug) return(tibble(to = article, href = href,
+                                href_corrected = corrected))
 }
+
 pub_crosslink_checks <- pub_crosslinks |> compact() |>
   map(\(crosslinks) crosslinks |> map_df(check_crosslink))
 bad_crosslinks <- pub_crosslink_checks |> compact() |>
-  bind_rows(.id = "from") |> arrange(from)
+  bind_rows(.id = "from") #|> arrange(from)
+
+check_see <- \(text) {
+  sees <- text |> str_extract_all("\\[see [A-z]*?\\]") |> unlist() |>
+    str_extract("\\[see ([A-z]*?)\\]", group = TRUE) |> keep(\(s) str_length(s) > 0)
+  sees[!(sees %in% names(pub_ids))]
+}
+
+pub_miss <- map(pub_text, check_see) |> compact()
 ```
 
 # Crosslink-based network
