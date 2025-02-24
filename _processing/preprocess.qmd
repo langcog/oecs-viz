@@ -1,4 +1,4 @@
-```{r}
+```{r setup}
 library(dplyr)
 library(glue)
 library(httr)
@@ -9,6 +9,7 @@ library(tibble)
 library(tidyr)
 
 library(tidytext)
+library(stopwords)
 library(udpipe)
 library(tidygraph)
 library(lsa)
@@ -28,7 +29,7 @@ source("PrepText.R")
 
 # Article fetching and processing
 
-```{r}
+```{r fetch-pubs}
 # call of pubpub API for OECS
 oecs_request <- \(verb, endpoint, ...) {
   url <- str_c("https:/oecs.mit.edu/api/", endpoint)
@@ -68,8 +69,10 @@ get_pub_content <- \(pub_id, pub_title) {
   pub_req <- oecs_request("GET", glue("pubs/{pub_id}/text"))
   pub_req |> content("parsed")
 }
-pub_contents <- imap(pub_ids, get_pub_content)
+pub_contents <- imap(pub_ids, possibly(get_pub_content))
+```
 
+```{r extract-text}
 # transform a pub's content to only text nodes
 get_pub_text_nodes <- \(pub) {
   
@@ -112,7 +115,9 @@ get_pub_text <- \(text_nodes) {
 
 # get text string of each pub
 pub_text <- map_chr(pub_text_nodes, get_pub_text)
+```
 
+```{r extract-links}
 # # transform pub text nodes to list of links
 # get_pub_crosslinks <- \(text_nodes) {
 #   
@@ -134,10 +139,11 @@ pub_text <- map_chr(pub_text_nodes, get_pub_text)
 # pub_crosslinks <- map(pub_text_nodes, get_pub_crosslinks)
 ```
 
-```{r}
+```{r check-links}
 # # identify incorrect crosslink hrefs
 # check_crosslink <- \(crosslink) {
 #   href <- if (is.null(crosslink$href)) "" else crosslink$href
+#   href <- str_remove(href, "/$") # remove trailing slash if present
 #   article <- crosslink$text
 #   
 #   # ignore external/section hrefs
@@ -170,7 +176,7 @@ pub_text <- map_chr(pub_text_nodes, get_pub_text)
 # pub_miss <- map(pub_text, check_see) |> compact()
 ```
 
-```{r}
+```{r compute-similarities}
 # prep text for network by tokenizing / counting lemmas
 pub_tibble <- pub_text |>
   enframe(name = "article", value = "text") |>
@@ -204,7 +210,7 @@ pubs_similarity <- pubs_cosine |> as_tibble(rownames = "article1") |>
            (max(similarity) - min(similarity)))
 ```
 
-```{r}
+```{r create-graph}
 pubs_similarity_sorted <- pubs_similarity |>
   filter(article1 != article2) |>
   arrange(article1, desc(similarity_norm))
@@ -254,7 +260,7 @@ pubs_similarity_graph_combined <- pubs_similarity_combined |>
 #   scale_colour_ptol(guide = "none")
 ```
 
-```{r}
+```{r save-data}
 slugs <- pub_slugs |> unlist() |> enframe(value = "slug")
 save(pubs_similarity_graph_combined, slugs, file = "pub_data.RData")
 ```
