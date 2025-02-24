@@ -12,6 +12,7 @@ library(tidyr)
 library(textnets)
 library(tidygraph)
 library(lsa)
+
 source("VisTextNet.R")
 
 .font <- "Noto Sans"
@@ -44,28 +45,30 @@ login <- oecs_request("POST", "login", body = creds)
 # get all pubs in OECS collection
 collection_query <- list(collectionId = "9dd2a47d-4a84-4126-9135-50a6383c26a9",
                          communityId = "e2759450-b8e2-433a-a70d-45aff0f75d45",
-                         limit = 100)
+                         limit = 200)
 collection_req <- oecs_request("GET", "collectionPubs", query = collection_query)
 collection <- content(collection_req, "parsed") |> transpose()
 
 pub_ids <- set_names(collection$id, collection$title)
 
 # get each pub
-get_pub <- \(pub_id) {
+get_pub <- \(pub_id, pub_title) {
+  message(glue('Fetching pub "{pub_title}"'))
   pub_req <- oecs_request("GET", glue("pubs/{pub_id}"))
   pub_req |> content("parsed")
 }
-pubs <- map(pub_ids, get_pub)
+pubs <- imap(pub_ids, get_pub)
 
 # get pub slugs
 pub_slugs <- map(pubs, \(pub) pub |> pluck("slug"))
 
 # get content of each pub
-get_pub_content <- \(pub_id) {
+get_pub_content <- \(pub_id, pub_title) {
+  message(glue('Fetching content for pub "{pub_title}"'))
   pub_req <- oecs_request("GET", glue("pubs/{pub_id}/text"))
   pub_req |> content("parsed")
 }
-pub_contents <- map(pub_ids, get_pub_content)
+pub_contents <- imap(pub_ids, get_pub_content)
 
 # transform a pub's content to only text nodes
 get_pub_text_nodes <- \(pub) {
@@ -155,6 +158,7 @@ pub_crosslink_checks <- pub_crosslinks |> compact() |>
 bad_crosslinks <- pub_crosslink_checks |> compact() |>
   bind_rows(.id = "from") #|> arrange(from)
 
+# identify incorrect "see $article" statements
 check_see <- \(text) {
   sees <- text |> str_extract_all("\\[see [A-z]*?\\]") |> unlist() |>
     str_extract("\\[see ([A-z]*?)\\]", group = TRUE) |> keep(\(s) str_length(s) > 0)
