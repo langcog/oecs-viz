@@ -1,4 +1,5 @@
 .Renviron
+.Rhistory
 .DS_Store
 .Rproj.user
 
@@ -6,3 +7,4 @@
 glove*
 
 /.quarto/
+_site/
