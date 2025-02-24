@@ -1,7 +1,5 @@
 ```{r}
 library(dplyr)
-library(ggplot2)
-library(ggthemes)
 library(glue)
 library(httr)
 library(purrr)
@@ -9,19 +7,22 @@ library(stringr)
 library(tibble)
 library(tidyr)
 
-library(textnets)
+library(tidytext)
+library(udpipe)
 library(tidygraph)
 library(lsa)
 
-.font <- "Noto Sans"
-sysfonts::font_add_google(.font, .font)
-theme_set(theme_bw(base_size = 14, base_family = .font))
-theme_update(panel.grid = element_blank(),
-             strip.background = element_blank(),
-             legend.key = element_blank(),
-             panel.border = element_blank(),
-             axis.line = element_line(),
-             strip.text = element_text(face = "bold"))
+source("PrepText.R")
+
+# .font <- "Noto Sans"
+# sysfonts::font_add_google(.font, .font)
+# theme_set(theme_bw(base_size = 14, base_family = .font))
+# theme_update(panel.grid = element_blank(),
+#              strip.background = element_blank(),
+#              legend.key = element_blank(),
+#              panel.border = element_blank(),
+#              axis.line = element_line(),
+#              strip.text = element_text(face = "bold"))
 ```
 
 # Article fetching and processing
@@ -173,9 +174,12 @@ pub_text <- map_chr(pub_text_nodes, get_pub_text)
 pub_tibble <- pub_text |>
   enframe(name = "article", value = "text") |>
   mutate(article = str_trim(article))
+
+udmodel <- udpipe_load_model(file = "resources/english-ewt-ud-2.5-191206.udpipe")
 prepped_pubs <- PrepText(pub_tibble, groupvar = "article", textvar = "text",
                          node_type = "groups", tokenizer = "words", pos = "nouns",
-                         remove_stop_words = TRUE, remove_numbers = TRUE)
+                         remove_stop_words = TRUE, remove_numbers = TRUE,
+                         udmodel_lang = udmodel)
 
 # read in cached glove vectors
 glove <- data.table::fread(file = "resources/glove.6B.50d.txt", sep = " ", quote = "")
