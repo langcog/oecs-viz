@@ -3,8 +3,5 @@
 .DS_Store
 .Rproj.user
 
-*udpipe
-glove*
-
 /.quarto/
 _site/

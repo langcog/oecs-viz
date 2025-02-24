@@ -1,0 +1,2 @@
+_processing/resources/english-ewt-ud-2.5-191206.udpipe filter=lfs diff=lfs merge=lfs -text
+_processing/resources/glove.6B.50d.txt filter=lfs diff=lfs merge=lfs -text
