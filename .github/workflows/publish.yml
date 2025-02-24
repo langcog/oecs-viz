@@ -31,8 +31,8 @@ jobs:
         uses: quarto-dev/quarto-actions/render@v2
         with:
           path: _processing/preprocess.qmd
-          env:
-            OECS_PASSWORD: ${{ secrets.OECS_PASSWORD }}
+        env:
+          OECS_PASSWORD: ${{ secrets.OECS_PASSWORD }}
 
       - name: Render and Publish
         uses: quarto-dev/quarto-actions/publish@v2
