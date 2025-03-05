@@ -1,12 +1,14 @@
 ```{r setup}
 library(dplyr)
 library(glue)
+library(here)
 library(httr)
-library(xml2)
+library(lubridate)
 library(purrr)
 library(stringr)
 library(tibble)
 library(tidyr)
+library(xml2)
 
 library(tidytext)
 library(stopwords)
@@ -14,17 +16,9 @@ library(udpipe)
 library(tidygraph)
 library(lsa)
 
-source("PrepText.R")
-
-# .font <- "Noto Sans"
-# sysfonts::font_add_google(.font, .font)
-# theme_set(theme_bw(base_size = 14, base_family = .font))
-# theme_update(panel.grid = element_blank(),
-#              strip.background = element_blank(),
-#              legend.key = element_blank(),
-#              panel.border = element_blank(),
-#              axis.line = element_line(),
-#              strip.text = element_text(face = "bold"))
+# slightly modified function from cbail/textnets package
+# tokenizes, tags pos, counts word prevalences
+source(here("helper/PrepText.R"))
 ```
 
 # Article fetching and processing
@@ -41,7 +35,6 @@ oecs_request <- \(verb, endpoint, ...) {
 pw <- Sys.getenv("OECS_PASSWORD")
 creds <- list(email = "mika.br@gmail.com", password = pw)
 login <- oecs_request("POST", "login", body = creds)
-# content(login, "text")
 
 # get all pubs in OECS collection
 collection_query <- list(collectionId = "9dd2a47d-4a84-4126-9135-50a6383c26a9",
@@ -118,62 +111,33 @@ pub_text <- map_chr(pub_text_nodes, get_pub_text)
 ```
 
 ```{r extract-links}
-# # transform pub text nodes to list of links
-# get_pub_crosslinks <- \(text_nodes) {
-#   
-#   # filter to only links
-#   nodes <- text_nodes |> keep(
-#     \(node) is.element("link", unlist(node$marks))
-#   ) |> compact()
-#   
-#   # get text and href of each link
-#   nodes |>
-#     map(\(node) {
-#       link <- node$marks |> keep(\(m) m$type == "link") |> flatten()
-#       list(href = link |> pluck("attrs", "href"),
-#            text = node |> pluck("text"))
-#     })
-# }
-# 
-# # get links of each pub
-# pub_crosslinks <- map(pub_text_nodes, get_pub_crosslinks)
+# transform pub text nodes to list of links
+get_pub_crosslinks <- \(text_nodes) {
+
+  # filter to only links
+  nodes <- text_nodes |> keep(
+    \(node) is.element("link", unlist(node$marks))
+  ) |> compact()
+
+  # get text and href of each link
+  nodes |>
+    map(\(node) {
+      link <- node$marks |> keep(\(m) m$type == "link") |> flatten()
+      list(href = link |> pluck("attrs", "href"),
+           text = node |> pluck("text"))
+    })
+}
+
+# get links of each pub
+pub_crosslinks <- map(pub_text_nodes, get_pub_crosslinks)
 ```
 
-```{r check-links}
-# # identify incorrect crosslink hrefs
-# check_crosslink <- \(crosslink) {
-#   href <- if (is.null(crosslink$href)) "" else crosslink$href
-#   href <- str_remove(href, "/$") # remove trailing slash if present
-#   article <- crosslink$text
-#   
-#   # ignore external/section hrefs
-#   if (href != "" &&
-#       (str_detect(href, "#.*$") | !str_detect(href, "oecs"))) return(NULL)
-#   
-#   # check article exists and its slug is right
-#   slug <- href |> str_extract("[A-z0-9]+$")
-#   target_slug <- pub_slugs[[article]]
-#   good_slug <- !is.na(slug) && !is.null(target_slug) && slug == target_slug
-#   # good_slug <- article %in% names(pub_slugs) &&
-#   #   !is.na(slug) && slug == pub_slugs[[article]]
-#   corrected <- if (is.null(target_slug)) NULL else paste0("https://oecs.mit.edu/pub/", target_slug)
-#   if (!good_slug) return(tibble(to = article, href = href,
-#                                 href_corrected = corrected))
-# }
-# 
-# pub_crosslink_checks <- pub_crosslinks |> compact() |>
-#   map(\(crosslinks) crosslinks |> map_df(check_crosslink))
-# bad_crosslinks <- pub_crosslink_checks |> compact() |>
-#   bind_rows(.id = "from") #|> arrange(from)
-# 
-# # identify incorrect "see $article" statements
-# check_see <- \(text) {
-#   sees <- text |> str_extract_all("\\[see [A-z]*?\\]") |> unlist() |>
-#     str_extract("\\[see ([A-z]*?)\\]", group = TRUE) |> keep(\(s) str_length(s) > 0)
-#   sees[!(sees %in% names(pub_ids))]
-# }
-# 
-# pub_miss <- map(pub_text, check_see) |> compact()
+```{r}
+save(pub_ids, pub_slugs, pub_text, pub_crosslinks,
+     file = here(glue("data/oecs_data_{today()}.RData")))
+
+save(pub_ids, pub_slugs, pub_text, pub_crosslinks,
+     file = here(glue("data/oecs_data_latest.RData")))
 ```
 
 ```{r compute-similarities}
@@ -182,14 +146,16 @@ pub_tibble <- pub_text |>
   enframe(name = "article", value = "text") |>
   mutate(article = str_trim(article))
 
-udmodel <- udpipe_load_model(file = "resources/english-ewt-ud-2.5-191206.udpipe")
+udmodel <- udpipe_load_model(
+  file = here("resources/english-ewt-ud-2.5-191206.udpipe"))
 prepped_pubs <- PrepText(pub_tibble, groupvar = "article", textvar = "text",
                          node_type = "groups", tokenizer = "words", pos = "nouns",
                          remove_stop_words = TRUE, remove_numbers = TRUE,
                          udmodel_lang = udmodel)
 
 # read in cached glove vectors
-glove <- data.table::fread(file = "resources/glove.6B.50d.txt", sep = " ", quote = "")
+glove <- data.table::fread(file = here("resources/glove.6B.50d.txt"),
+                           sep = " ", quote = "")
 
 # combine pub text with vectors
 pub_lemmas_glove <- prepped_pubs |>
@@ -211,14 +177,16 @@ pubs_similarity <- pubs_cosine |> as_tibble(rownames = "article1") |>
 ```
 
 ```{r create-graph}
+# graph parameters
+min_edges <- 2
+max_edges <- 8
+
 pubs_similarity_sorted <- pubs_similarity |>
   filter(article1 != article2) |>
   arrange(article1, desc(similarity_norm))
 
 # find the smallest edge weight such that no vertex has more than max_edges
 # edges with similarity greater than it
-# min_edge_weight <- 0.85
-max_edges <- 8
 min_edge_weight <- pubs_similarity_sorted |>
   group_by(article1) |>
   slice(1:max_edges) |>
@@ -233,7 +201,6 @@ pubs_similarity_threshold <- pubs_similarity_sorted |>
 # pubs_similarity_threshold |> count(article1, sort = TRUE) max n should be max_edges
 
 # take top min_edges edges for each vertex so nothing ends up disconnected
-min_edges <- 2
 pubs_similarity_nn <- pubs_similarity_sorted |>
   group_by(article1) |>
   slice(1:min_edges) |>
@@ -262,5 +229,5 @@ pubs_similarity_graph_combined <- pubs_similarity_combined |>
 
 ```{r save-data}
 slugs <- pub_slugs |> unlist() |> enframe(value = "slug")
-save(pubs_similarity_graph_combined, slugs, file = "pub_data.RData")
+save(pubs_similarity_graph_combined, slugs, file = "data/pub_graph.RData")
 ```

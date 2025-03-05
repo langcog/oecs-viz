@@ -4,5 +4,10 @@ project:
 
 format:
   html:
-    theme: theme.scss
     page-layout: full
+
+execute:
+  echo: false
+  message: false
+  warning: false
+  error: false

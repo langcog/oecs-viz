@@ -1,0 +1,69 @@
+---
+format:
+  html:
+    theme: scss/theme-crosslinks.scss
+---
+
+```{r setup}
+library(dplyr)
+library(here)
+library(purrr)
+library(stringr)
+library(tibble)
+library(tidyr)
+
+load(here("data/oecs_data_latest.RData"))
+```
+
+```{r check-links}
+# find "[see ARTICLE]" text without an actual links
+get_see <- \(text) {
+  text |> str_extract_all("\\[see [A-z]*?\\]") |> unlist() |>
+    str_extract("\\[see ([A-z]*?)\\]", group = TRUE) |>
+    keep(\(s) str_length(s) > 0) |>
+    map(\(s) list(href = as.character(NA), text = s))
+}
+
+# pub_text_test <- pub_text[1:2] |> map(\(t) paste(t, "[see Hearing] [see Affordances]"))
+pub_unlinked <- map(pub_text, get_see)
+
+# combine actual links with unlinked references
+crosslinks_combined <- imap(pub_crosslinks, \(links, pub) append(links, pub_unlinked[[pub]]))
+
+# look up correct target href and identify incorrect hrefs
+# crosslink <- list(href = "", text = "")
+check_crosslink <- \(crosslink) {
+  href <- if (is.null(crosslink$href)) "" else crosslink$href
+  href <- str_remove(href, "/$") # remove trailing slash if present
+  article <- crosslink$text
+
+  # ignore external/section hrefs
+  if (!is.na(href) && href != "" &&
+      (str_detect(href, "#.*$") | !str_detect(href, "oecs"))) return(NULL)
+
+  # check article exists and its slug is right
+  slug <- href |> str_extract("[A-z0-9]+$")
+  target_slug <- pub_slugs[[article]]
+  good_slug <- !is.na(slug) && !is.null(target_slug) && slug == target_slug
+  corrected <- if (is.null(target_slug)) NULL else paste0("https://oecs.mit.edu/pub/", target_slug)
+  tibble(to = article, href_from = href, href_to = corrected, bad_href = !good_slug)
+}
+
+# look up and check each link
+pub_crosslink_checks <- crosslinks_combined |>
+  map(\(crosslinks) crosslinks |> map_df(check_crosslink))
+
+# transform to output dataframe
+pub_crosslink_df <- pub_crosslink_checks |> compact() |>
+  bind_rows(.id = "from") |>
+  arrange(desc(bad_href), from) |>
+  mutate(across(c(from, to), \(s) paste0('"', s, '"')))
+```
+
+```{r}
+DT::datatable(pub_crosslink_df,
+              options = list(pageLength = 500), rownames = FALSE,
+              colnames = c("href in from" = "href_from",
+                           "href expected by to" = "href_to",
+                           "href problem" = "bad_href"))
+```

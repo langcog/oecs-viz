@@ -2,22 +2,18 @@
 format:
   html:
     self-contained: true
-
-execute:
-  echo: false
-  message: false
-  warning: false
-  error: false
+    theme: scss/theme-index.scss
 ---
 
 ```{r}
 library(htmlwidgets)
 library(dplyr)
+library(here)
 library(tibble)
 library(igraph)
 library(networkD3)
 
-load("_processing/pub_data.RData")
+load(here("data/pub_graph.RData"))
 ```
 
 ```{r}
@@ -39,7 +35,7 @@ nodeClick = 'window.open("https://oecs.mit.edu/pub/" + d.nodesize, "_blank");'
 forceNetwork(
   Links = links, Nodes = nodes, Source = "source",
   Target = "target", NodeID = "name",
-  Value = "similarity_norm",
+  Value = "similarity_renorm",
   Nodesize = "slug", # hack to make slug available
   Group = "group",
   linkWidth = JS("function(d) { return d.slug; }"),
