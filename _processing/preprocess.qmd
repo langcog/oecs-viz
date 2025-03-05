@@ -18,7 +18,7 @@ library(lsa)
 
 # slightly modified function from cbail/textnets package
 # tokenizes, tags pos, counts word prevalences
-source(here("helper/PrepText.R"))
+source(here("_processing/helper/PrepText.R"))
 ```
 
 # Article fetching and processing
@@ -147,14 +147,14 @@ pub_tibble <- pub_text |>
   mutate(article = str_trim(article))
 
 udmodel <- udpipe_load_model(
-  file = here("resources/english-ewt-ud-2.5-191206.udpipe"))
+  file = here("_processing/resources/english-ewt-ud-2.5-191206.udpipe"))
 prepped_pubs <- PrepText(pub_tibble, groupvar = "article", textvar = "text",
                          node_type = "groups", tokenizer = "words", pos = "nouns",
                          remove_stop_words = TRUE, remove_numbers = TRUE,
                          udmodel_lang = udmodel)
 
 # read in cached glove vectors
-glove <- data.table::fread(file = here("resources/glove.6B.50d.txt"),
+glove <- data.table::fread(file = here("_processing/resources/glove.6B.50d.txt"),
                            sep = " ", quote = "")
 
 # combine pub text with vectors
