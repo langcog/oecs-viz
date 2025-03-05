@@ -229,5 +229,5 @@ pubs_similarity_graph_combined <- pubs_similarity_combined |>
 
 ```{r save-data}
 slugs <- pub_slugs |> unlist() |> enframe(value = "slug")
-save(pubs_similarity_graph_combined, slugs, file = "data/pub_graph.RData")
+save(pubs_similarity_graph_combined, slugs, file = here("data/pub_graph.RData"))
 ```
