@@ -39,7 +39,7 @@ login <- oecs_request("POST", "login", body = creds)
 # get all pubs in OECS collection
 collection_query <- list(collectionId = "9dd2a47d-4a84-4126-9135-50a6383c26a9",
                          communityId = "e2759450-b8e2-433a-a70d-45aff0f75d45",
-                         limit = 200)
+                         limit = 1000)
 collection_req <- oecs_request("GET", "collectionPubs", query = collection_query)
 collection <- content(collection_req, "parsed") |> transpose()
 

@@ -18,8 +18,8 @@ load(here("data/oecs_data_latest.RData"))
 ```{r check-links}
 # find "[see ARTICLE]" text without an actual links
 get_see <- \(text) {
-  text |> str_extract_all("\\[see [A-z]*?\\]") |> unlist() |>
-    str_extract("\\[see ([A-z]*?)\\]", group = TRUE) |>
+  text |> str_extract_all("\\[see [A-Z][A-z ]*?\\]") |> unlist() |>
+    str_extract("\\[see ([A-Z][A-z ]*?)\\]", group = TRUE) |>
     keep(\(s) str_length(s) > 0) |>
     map(\(s) list(href = as.character(NA), text = s))
 }
