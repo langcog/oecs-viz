@@ -44,7 +44,8 @@ get_pub <- \(pub_id, pub_title) {
 pubs <- imap(pub_ids, get_pub)
 
 # get pub slugs
-pub_slugs <- map(pubs, \(pub) pub |> pluck("slug"))
+pub_slugs <- map_chr(pubs, \(pub) pub |> pluck("slug")) |>
+   enframe(name = "name", value = "slug")
 
 # get content of each pub
 get_pub_content <- \(pub_id, pub_title) {
@@ -66,11 +67,14 @@ theme_titles <- theme_collections |> map_chr(\(tc) tc$title)
 theme_pubs <- theme_collections |> map(\(tc) tc$collectionPubs |> map_chr(\(p) p$pub$title))
 
 themes <- set_names(theme_pubs, theme_titles)
-pub_themes <- themes |> enframe(name = "theme", value = "pub") |> unnest(pub) |>
-  group_by(pub) |> summarise(themes = list(theme)) |> deframe()
+pub_themes <- themes |> enframe(name = "theme", value = "name") |> unnest(name) |>
+  group_by(name) |> summarise(themes = list(theme)) # |> deframe()
   # relocate(pub, .before = everything()) |> deframe()
 # nest(themes = theme) |> 
 # transpose(themes)
+
+pub_meta <- pub_slugs |> left_join(pub_themes)
+write_rds(pub_meta, "data/pub_meta.rds")
 ```
 
 ```{r extract-text}
