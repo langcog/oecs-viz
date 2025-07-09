@@ -1,0 +1,149 @@
+```{r setup}
+library(dplyr)
+library(glue)
+library(here)
+library(httr)
+library(lubridate)
+library(purrr)
+library(stringr)
+library(tibble)
+library(tidyr)
+library(xml2)
+```
+
+# Article fetching and processing
+
+```{r fetch-pubs}
+# call of pubpub API for OECS
+oecs_request <- \(verb, endpoint, ...) {
+  url <- str_c("https:/oecs.mit.edu/api/", endpoint)
+  VERB(verb, url, content_type("application/json"), accept("application/json"),
+       encode = "json", ...)
+}
+
+# authenticate
+pw <- Sys.getenv("OECS_PASSWORD")
+creds <- list(email = "mika.br@gmail.com", password = pw)
+login <- oecs_request("POST", "login", body = creds)
+
+# get all pubs in OECS collection
+collection_query <- list(collectionId = "9dd2a47d-4a84-4126-9135-50a6383c26a9",
+                         communityId = "e2759450-b8e2-433a-a70d-45aff0f75d45",
+                         limit = 1000)
+collection_req <- oecs_request("GET", "collectionPubs", query = collection_query)
+collection <- content(collection_req, "parsed") |> transpose()
+
+pub_ids <- set_names(collection$id, collection$title)
+
+# get each pub
+get_pub <- \(pub_id, pub_title) {
+  message(glue('Fetching pub "{pub_title}"'))
+  pub_req <- oecs_request("GET", glue("pubs/{pub_id}"))
+  pub_req |> content("parsed")
+}
+pubs <- imap(pub_ids, get_pub)
+
+# get pub slugs
+pub_slugs <- map(pubs, \(pub) pub |> pluck("slug"))
+
+# get content of each pub
+get_pub_content <- \(pub_id, pub_title) {
+  message(glue('Fetching content for pub "{pub_title}"'))
+  pub_req <- oecs_request("GET", glue("pubs/{pub_id}/text"))
+  pub_req |> content("parsed")
+}
+pub_contents <- imap(pub_ids, possibly(get_pub_content))
+```
+
+```{r}
+theme_page <- oecs_request("GET", "pages/themes") |> content("parsed")
+theme_items <- theme_page$layout |> map(\(l) l$content$item) |> flatten()
+theme_ids <- theme_items |> keep(\(i) i$type == "collection") |> map_chr(\(i) i$id)
+
+theme_collections <- theme_ids |>
+  map(\(id) oecs_request("GET", glue("collections/{id}")) |> content("parsed"))
+theme_titles <- theme_collections |> map_chr(\(tc) tc$title)
+theme_pubs <- theme_collections |> map(\(tc) tc$collectionPubs |> map_chr(\(p) p$pub$title))
+
+themes <- set_names(theme_pubs, theme_titles)
+pub_themes <- themes |> enframe(name = "theme", value = "pub") |> unnest(pub) |>
+  group_by(pub) |> summarise(themes = list(theme)) |> deframe()
+  # relocate(pub, .before = everything()) |> deframe()
+# nest(themes = theme) |> 
+# transpose(themes)
+```
+
+```{r extract-text}
+# transform a pub's content to only text nodes
+get_pub_text_nodes <- \(pub) {
+  
+  pub_content <- pub |> pluck("content")
+  # remove any end matter
+  end_ids <- c("references", "further-reading")
+  end <- pub_content |> map_lgl(\(pc) pc$type == "heading" &
+                                  is.element(pc$attrs$id, end_ids))
+  end_start <- if (any(end)) end |> which() |> min() else length(pub_content)
+  pre_end <- pub_content[seq_len(end_start - 1)]
+  
+  # filter to paragraph nodes, get their content
+  paragraphs <- pre_end |> keep(\(pc) pc$type == "paragraph") |>
+    map(\(p) p$content) |> compact()
+  
+  # flatten node tree to one remaining nesting level
+  flattener <- map(seq_along(pluck_depth(paragraphs) - 1), \(i) list_flatten) |>
+    reduce(compose)
+  nodes <- flattener(paragraphs)
+  
+  # filter to text nodes
+  nodes |> keep(\(node) node$type == "text")
+}
+
+# get text nodes of each pub
+pub_text_nodes <- map(pub_contents, get_pub_text_nodes)
+
+# transform pub text nodes to single string
+get_pub_text <- \(text_nodes) {
+  
+  # remove links/markup
+  nodes <- text_nodes |> keep(
+    \(node) !any(is.element(c("link", "em"), unlist(node$marks)))
+  ) |> compact()
+  
+  # get node text, combine
+  text <- nodes |> transpose() |> pluck("text")
+  text |> paste(collapse = "") |> str_remove_all(" \\([; ]*\\)")
+}
+
+# get text string of each pub
+pub_text <- map_chr(pub_text_nodes, get_pub_text)
+```
+
+```{r extract-links}
+# transform pub text nodes to list of links
+get_pub_crosslinks <- \(text_nodes) {
+
+  # filter to only links
+  nodes <- text_nodes |> keep(
+    \(node) is.element("link", unlist(node$marks))
+  ) |> compact()
+
+  # get text and href of each link
+  nodes |>
+    map(\(node) {
+      link <- node$marks |> keep(\(m) m$type == "link") |> flatten()
+      list(href = link |> pluck("attrs", "href"),
+           text = node |> pluck("text"))
+    })
+}
+
+# get links of each pub
+pub_crosslinks <- map(pub_text_nodes, get_pub_crosslinks)
+```
+
+```{r}
+save(pub_ids, pub_slugs, pub_text, pub_crosslinks,
+     file = here(glue("data/oecs_data_{today()}.RData")))
+
+save(pub_ids, pub_slugs, pub_text, pub_crosslinks,
+     file = here(glue("data/oecs_data_latest.RData")))
+```
