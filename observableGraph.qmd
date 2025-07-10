@@ -248,14 +248,28 @@ function ForceGraph({
 nt = transpose(nodes)
 lt = transpose(links)
 tt = transpose(node_themes)
+//themes = d3.group(tt, d => d.theme)
+```
 
-themes = d3.group(tt, d => d.theme)
+```{ojs}
+//| panel: input
+//| layout-ncol: 2
+
 viewof theme = Inputs.select(d3.group(tt, d => d.theme), {
+  label: "Themes",
   multiple: true,
   value: true
 })
 
-theme_vals = Array.from(new Set(node_themes.theme)).sort()
+viewof threshold = Inputs.range([0, 1], {
+  label: "Minimum edge weight",
+  step: 0.01,
+  value: 0
+})
+```
+
+```{ojs}
+//theme_vals = Array.from(new Set(node_themes.theme)).sort()
 //viewof themes = Inputs.checkbox(theme_vals, {
 //  value: theme_vals
 //})
@@ -263,9 +277,11 @@ theme_vals = Array.from(new Set(node_themes.theme)).sort()
 //theme_ids = transpose(node_themes).filter(d => themes.includes(d.theme)).map(d => d.id)
 theme_ids = theme.length ? theme.flat(1).map(d => d.id) : tt.map(d => d.id)
 
-ntf = nt.filter(d => theme_ids.includes(d.id))
 ltf = lt.filter(d => theme_ids.includes(d.source))
         .filter(d => theme_ids.includes(d.target))
+        .filter(d => d.value >= threshold)
+//ntf = nt.filter(d => theme_ids.includes(d.id))
+ntf = nt.filter(d => ltf.map(d => d.source).includes(d.id) | ltf.map(d => d.target).includes(d.id))
 ```
 
 ```{ojs}
