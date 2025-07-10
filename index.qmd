@@ -9,22 +9,25 @@ format:
 library(htmlwidgets)
 library(dplyr)
 library(here)
+library(readr)
 library(tibble)
 library(igraph)
 library(networkD3)
 
-load(here("data/pub_graph.RData"))
+# load(here("data/pub_graph.RData"))
+pub_graph <- read_rds(here("data/pub_graph.rds"))
+pub_meta <- read_rds(here("data/pub_meta.rds"))
 ```
 
 ```{r}
-nodes <- pubs_similarity_graph_combined |>
+nodes <- pub_graph |>
   as_data_frame("vertices") |>
   mutate(id = row_number() - 1) |>
   remove_rownames() |>
-  left_join(slugs)
+  left_join(pub_meta)
 
 node_ids <- nodes |> select(name, id)
-links <- pubs_similarity_graph_combined |>
+links <- pub_graph |>
   as_data_frame("edges") |>
   left_join(node_ids, by = c("from" = "name")) |>
   left_join(node_ids, by = c("to" = "name")) |>
