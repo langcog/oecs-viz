@@ -14,7 +14,8 @@ library(tidyr)
 
 library(igraph) # must load after tidyverse
 
-pub_graph <- read_rds(here("data/pub_graph.rds"))
+# pub_graph <- read_rds(here("data/pub_graph.rds"))
+pub_graph <- read_rds(here("data/pub_graph_full.rds"))
 pub_meta <- read_rds(here("data/pub_meta.rds"))
 ```
 
@@ -24,24 +25,28 @@ nodes <- pub_graph |>
   as_tibble() |>
   left_join(pub_meta) |>
   rename(id = name)
-  # mutate(id = row_number() - 1) |>
-  # remove_rownames() |>
 
-# node_ids <- nodes |> select(name, id)
 links <- pub_graph |>
   as_data_frame("edges") |>
   as_tibble() |>
-  select(source = from, target = to, value = similarity_renorm)
-  # left_join(node_ids, by = c("from" = "name")) |>
-  # left_join(node_ids, by = c("to" = "name")) |>
-  # rename(source = id.x, target = id.y)
+  select(source = from, target = to, value = similarity_norm) |>
+  # select(source = from, target = to, value = similarity_renorm) |>
+  distinct()
 
+theme_all <- nodes |> distinct(id) |> mutate(theme = "All")
 node_themes <- nodes |>
   select(theme = themes, id) |>
   unnest(theme) |>
   arrange(theme)
+themes <- bind_rows(theme_all, node_themes)
 
-ojs_define(nodes = nodes, links = links, node_themes = node_themes)
+cluster_all <- nodes |> distinct(id) |> mutate(group = "All")
+node_clusters <- nodes |>
+  select(id, group) |>
+  arrange(group)
+clusters <- bind_rows(cluster_all, node_clusters)
+
+ojs_define(nodes = nodes, links = links, themes = themes, clusters = clusters)
 ```
 
 ```{ojs}
@@ -247,7 +252,8 @@ function ForceGraph({
 ```{ojs}
 nt = transpose(nodes)
 lt = transpose(links)
-tt = transpose(node_themes)
+tt = transpose(themes)
+ct = transpose(clusters)
 //themes = d3.group(tt, d => d.theme)
 ```
 
@@ -256,15 +262,26 @@ tt = transpose(node_themes)
 //| layout-ncol: 2
 
 viewof theme = Inputs.select(d3.group(tt, d => d.theme), {
-  label: "Themes",
-  multiple: true,
-  value: true
+  label: "Theme",
+  //multiple: true,
+  value: "All"
 })
 
-viewof threshold = Inputs.range([0, 1], {
-  label: "Minimum edge weight",
+viewof group = Inputs.select(d3.group(ct, d => d.group), {
+  label: "Cluster",
+  value: "All"
+})
+
+viewof k = Inputs.range([1, 8], {
+  label: "Include closest k neighbors for each article",
+  step: 1,
+  value: 2
+})
+
+viewof s = Inputs.range([0.9, 1], {
+  label: "Include links with similarity at least",
   step: 0.01,
-  value: 0
+  value: 0.95
 })
 ```
 
@@ -273,15 +290,28 @@ viewof threshold = Inputs.range([0, 1], {
 //viewof themes = Inputs.checkbox(theme_vals, {
 //  value: theme_vals
 //})
-
 //theme_ids = transpose(node_themes).filter(d => themes.includes(d.theme)).map(d => d.id)
-theme_ids = theme.length ? theme.flat(1).map(d => d.id) : tt.map(d => d.id)
 
-ltf = lt.filter(d => theme_ids.includes(d.source))
-        .filter(d => theme_ids.includes(d.target))
-        .filter(d => d.value >= threshold)
-//ntf = nt.filter(d => theme_ids.includes(d.id))
-ntf = nt.filter(d => ltf.map(d => d.source).includes(d.id) | ltf.map(d => d.target).includes(d.id))
+theme_ids = theme.map(d => d.id)
+group_ids = group.map(d => d.id)
+//theme_ids = theme.length ? theme.flat(1).map(d => d.id) : tt.map(d => d.id)
+
+ltg = d3.groups(lt, d => d.source)
+  .flatMap(([source, values]) => 
+    //values.sort((a, b) => b.value - a.value).slice(0, 2)
+    values
+      .sort((a, b) => b.value - a.value)
+      .filter((d, i) => i < k || d.value >= s)
+)
+
+ltf = ltg.filter(d => theme_ids.includes(d.source)) // || theme_ids.includes(d.target))
+         .filter(d => theme_ids.includes(d.target))
+         .filter(d => group_ids.includes(d.source))
+         .filter(d => group_ids.includes(d.target))
+//        .filter(d => d.value >= threshold)
+ntf = nt.filter(d => theme_ids.includes(d.id))
+        .filter(d => group_ids.includes(d.id))
+//ntf = nt.filter(d => ltf.map(d => d.source).includes(d.id) || ltf.map(d => d.target).includes(d.id))
 ```
 
 ```{ojs}

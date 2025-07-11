@@ -52,8 +52,10 @@ pubs_glove <- pub_lemmas_glove |>
 # get pairwise similarity between pub vectors
 pubs_mat <- pubs_glove |> column_to_rownames("article") |> t()
 pubs_cosine <- cosine(pubs_mat)
+# pubs_cosine[lower.tri(pubs_cosine, diag = TRUE)] <- 0
 pubs_similarity <- pubs_cosine |> as_tibble(rownames = "article1") |>
   pivot_longer(-article1, names_to = "article2", values_to = "similarity") |>
+  filter(similarity != 0) |>
   mutate(similarity_norm = (similarity - min(similarity)) /
            (max(similarity) - min(similarity)))
 ```
@@ -113,4 +115,14 @@ pubs_similarity_graph_combined <- pubs_similarity_combined |>
 # slugs <- pub_slugs |> unlist() |> enframe(value = "slug")
 # save(pubs_similarity_graph_combined, file = here("data/pub_graph.RData"))
 write_rds(pubs_similarity_graph_combined, "data/pub_graph.rds")
+```
+
+```{r save-data}
+pub_graph_full <- pubs_similarity_sorted |>
+  as_tbl_graph(directed = FALSE) |>
+  # mutate(group = factor(group_leiden(weights = similarity_norm))) |>
+  mutate(group = factor(group_louvain(weights = similarity_norm))) |>
+  mutate(centrality = centrality_alpha())
+
+write_rds(pub_graph_full, "data/pub_graph_full.rds")
 ```
