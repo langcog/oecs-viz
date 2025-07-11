@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://langcog.github.io/oecs-viz/index.html</loc>
-    <lastmod>2025-07-10T20:33:55.653Z</lastmod>
+    <loc>https://langcog.github.io/oecs-viz/crosslinks.html</loc>
+    <lastmod>2025-07-11T19:32:22.249Z</lastmod>
   </url>
   <url>
     <loc>https://langcog.github.io/oecs-viz/observableGraph.html</loc>
-    <lastmod>2025-07-10T20:33:55.653Z</lastmod>
+    <lastmod>2025-07-11T19:32:22.255Z</lastmod>
   </url>
   <url>
-    <loc>https://langcog.github.io/oecs-viz/crosslinks.html</loc>
-    <lastmod>2025-07-10T20:33:55.651Z</lastmod>
+    <loc>https://langcog.github.io/oecs-viz/index.html</loc>
+    <lastmod>2025-07-11T19:32:22.255Z</lastmod>
   </url>
 </urlset>
