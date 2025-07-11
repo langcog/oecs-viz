@@ -2,7 +2,7 @@
 format:
   html:
     self-contained: true
-    theme: scss/theme-index.scss
+    theme: scss/theme-ojs.scss
 ---
 
 ```{r}
@@ -257,33 +257,48 @@ ct = transpose(clusters)
 //themes = d3.group(tt, d => d.theme)
 ```
 
-```{ojs}
-//| panel: input
-//| layout-ncol: 2
 
+::: {.panel-input}
+
+::: {.input-group}
+__Filter articles by...__
+```{ojs}
 viewof theme = Inputs.select(d3.group(tt, d => d.theme), {
   label: "Theme",
   //multiple: true,
   value: "All"
 })
+```
 
+```{ojs}
 viewof group = Inputs.select(d3.group(ct, d => d.group), {
   label: "Cluster",
   value: "All"
 })
+```
 
+:::
+
+::: {.input-group}
+__Include links that are any of...__
+```{ojs}
 viewof k = Inputs.range([1, 8], {
-  label: "Include closest k neighbors for each article",
+  label: "Each article's k closest neighbors",
   step: 1,
   value: 2
 })
+```
 
+```{ojs}
 viewof s = Inputs.range([0.9, 1], {
-  label: "Include links with similarity at least",
+  label: "Edge weight at least",
   step: 0.01,
   value: 0.95
 })
 ```
+
+:::
+:::
 
 ```{ojs}
 //theme_vals = Array.from(new Set(node_themes.theme)).sort()

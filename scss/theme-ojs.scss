@@ -1,0 +1,50 @@
+/*-- scss:functions --*/
+
+/*-- scss:defaults --*/
+
+$content-padding-top: 0px;
+
+/*-- scss:rules --*/
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap');
+
+body {
+  //overflow: hidden;
+  font-family: "Noto Sans";
+}
+
+.label:has(+ .form) {
+  flex-shrink: unset !important;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start !important;
+  width: auto !important;
+  //row-gap: 2em;
+  
+  label {
+    width: auto !important;
+    //font-weight: bold;
+  }
+  
+  select {
+    width: auto !important;
+  }
+}
+
+.panel-input {
+  font-size: .8rem;
+  display: flex;
+  flex-direction: row;
+  column-gap: 2em;
+}
+
+.input-group {
+  width: auto;
+  
+  p {
+    margin-bottom: 0;
+  }
+}
