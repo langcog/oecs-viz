@@ -43,7 +43,8 @@ themes <- bind_rows(theme_all, node_themes)
 cluster_all <- nodes |> distinct(id) |> mutate(group = "All")
 node_clusters <- nodes |>
   select(id, group) |>
-  arrange(group)
+  arrange(group) |>
+  mutate(group = paste("Cluster", group))
 clusters <- bind_rows(cluster_all, node_clusters)
 
 ojs_define(nodes = nodes, links = links, themes = themes, clusters = clusters)
@@ -272,7 +273,7 @@ viewof theme = Inputs.select(d3.group(tt, d => d.theme), {
 
 ```{ojs}
 viewof group = Inputs.select(d3.group(ct, d => d.group), {
-  label: "Cluster",
+  label: "Network cluster",
   value: "All"
 })
 ```
@@ -330,13 +331,18 @@ ntf = nt.filter(d => theme_ids.includes(d.id))
 ```
 
 ```{ojs}
+groups = [...new Set(ct.map(d => d.group))]
+nodeGroups = [...groups.keys()].splice(1).map(d => d.toString())
+
 ForceGraph({nodes: ntf, links: ltf}, {
   nodeGroup: d => d.group,
+  nodeGroups: nodeGroups,
   nodeTitle: d => d.id,
   nodeLink: d => `https://oecs.mit.edu/pub/${d.slug}`,
   linkStrokeWidth: l => l.value,
   //linkStrokeWidth: l => Math.sqrt(l.value),
-  colors: d3.schemeCategory10,
+  //colors: d3.schemeCategory10,
+  colors: d3.schemeCategory10.slice(0, nodeGroups.length),
   repulsion: -100,
   width: 1200,
   height: 1000
