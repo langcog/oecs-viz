@@ -35,19 +35,34 @@ prepped_pubs <- PrepText(pub_tibble, groupvar = "article", textvar = "text",
                          remove_stop_words = TRUE, remove_numbers = TRUE,
                          udmodel_lang = udmodel)
 
+pubs_tf <- prepped_pubs |>
+  group_by(article) |>
+  mutate(tf = count / sum(count)) |>
+  ungroup()
+
+pubs_idf <- prepped_pubs |>
+  group_by(lemma) |>
+  summarise(n_articles = n()) |>
+  mutate(idf = log(sum(n_articles) / n_articles))
+
+pubs_tfidf <- pubs_tf |>
+  left_join(pubs_idf) |>
+  mutate(tfidf = tf * idf) |>
+  select(article, lemma, tfidf)
+
 # read in cached glove vectors
 glove <- data.table::fread(file = here("_processing/resources/glove.6B.50d.txt"),
                            sep = " ", quote = "")
 
 # combine pub text with vectors
-pub_lemmas_glove <- prepped_pubs |>
-  ungroup() |>
+pub_lemmas_glove <- pubs_tfidf |>
+  # ungroup() |>
   inner_join(glove, by = c("lemma" = "V1"))
 
 # take mean of vectors for each pub
 pubs_glove <- pub_lemmas_glove |>
   group_by(article) |>
-  summarise(across(starts_with("V"), mean))
+  summarise(across(starts_with("V"), \(v) weighted.mean(v, tfidf)))
 
 # get pairwise similarity between pub vectors
 pubs_mat <- pubs_glove |> column_to_rownames("article") |> t()

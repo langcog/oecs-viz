@@ -27,19 +27,21 @@ nodes <- pub_similarity_graph |>
   left_join(pub_meta) |>
   rename(id = name)
 
+# links (edges) from crosslinks
 links_crosslink <- pub_crosslink_graph |>
   as_data_frame("edges") |>
   as_tibble() |>
   select(source = from, target = to) |>
   mutate(crosslink = 1)
 
-# links (edges)
+# links (edges) from similarity
 links_similarity <- pub_similarity_graph |>
   as_data_frame("edges") |>
   as_tibble() |>
   select(source = from, target = to, similarity = similarity_norm) |>
   distinct()
 
+# links combined
 links <- links_similarity |>
   left_join(links_crosslink) |>
   mutate(crosslink = replace_na(crosslink, 0))
