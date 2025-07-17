@@ -58,16 +58,16 @@ pubs_similarity <- pubs_cosine |> as_tibble(rownames = "article1") |>
   filter(similarity != 0) |>
   mutate(similarity_norm = (similarity - min(similarity)) /
            (max(similarity) - min(similarity)))
+
+pubs_similarity_sorted <- pubs_similarity |>
+  filter(article1 != article2) |>
+  arrange(article1, desc(similarity_norm))
 ```
 
 ```{r create-graph}
 # graph parameters
 min_edges <- 2
 max_edges <- 8
-
-pubs_similarity_sorted <- pubs_similarity |>
-  filter(article1 != article2) |>
-  arrange(article1, desc(similarity_norm))
 
 # find the smallest edge weight such that no vertex has more than max_edges
 # edges with similarity greater than it
@@ -118,11 +118,28 @@ write_rds(pubs_similarity_graph_combined, "data/pub_graph.rds")
 ```
 
 ```{r save-data}
-pub_graph_full <- pubs_similarity_sorted |>
+pub_similarity_graph <- pubs_similarity_sorted |>
   as_tbl_graph(directed = FALSE) |>
   # mutate(group = factor(group_leiden(weights = similarity_norm))) |>
-  mutate(group = factor(group_louvain(weights = similarity_norm))) |>
-  mutate(centrality = centrality_alpha())
+  mutate(group = factor(group_louvain(weights = similarity_norm)))
+  # mutate(centrality = centrality_alpha())
 
-write_rds(pub_graph_full, "data/pub_graph_full.rds")
+write_rds(pub_similarity_graph, "data/pub_similarity_graph.rds")
+```
+
+```{r}
+pub_crosslink_tbl <- pub_crosslinks |>
+  enframe() |>
+  mutate(value = map(value, bind_rows)) |>
+  unnest(value) |>
+  select(article1 = name, article2 = text)  |>
+  distinct() |>
+  semi_join(pub_tibble, by = c("article2" = "article"))
+  # full_join(pub_tibble |> select(article), by = c("article1" = "article"))
+  # filter(article1 %in% names(pub_text), article2 %in% names(pub_text))
+
+pub_crosslink_graph <- pub_crosslink_tbl |>
+  as_tbl_graph(directed = TRUE)
+
+write_rds(pub_crosslink_graph, "data/pub_crosslink_graph.rds")
 ```
