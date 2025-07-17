@@ -299,7 +299,7 @@ ct = transpose(clusters)
 ```
 
 
-::: {.panel-input}
+:::: {.panel-input}
 
 ::: {.input-group}
 __Filter articles by...__
@@ -348,9 +348,15 @@ viewof s = Inputs.range([0.7, 1], {
   disabled: metric !== "similarity"
 })
 ```
+:::
 
+::: {.input-group}
+```{ojs}
+html`<button class="btn btn-quarto btn-reset" onclick="location.reload()">Reset</button>`
+```
 :::
-:::
+
+::::
 
 ```{ojs}
 theme_ids = theme.map(d => d.id)

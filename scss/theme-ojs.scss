@@ -35,16 +35,27 @@ form {
 }
 
 .panel-input {
-  font-size: .8rem;
+  font-size: 0.8em;
   display: flex;
   flex-direction: row;
   column-gap: 2em;
+  align-items: flex-end;
+  justify-content: space-between;
 }
 
 .input-group {
   width: auto;
+  padding-right: 0 !important;
   
   p {
     margin-bottom: 0;
   }
+}
+
+.btn-reset {
+  font-size: 0.8em;
+  padding-left: 0.4em;
+  padding-right: 0.4em;
+  padding-top: 0.2em;
+  padding-bottom: 0.2em;
 }
