@@ -9,8 +9,17 @@ $content-padding-top: 0px;
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap');
 
 body {
-  //overflow: hidden;
+  overflow: hidden;
   font-family: "Noto Sans";
+}
+
+main {
+  margin-top: 0em;
+  margin-bottom: 0em;
+}
+
+#title-block-header {
+  margin-top: -1em;
 }
 
 .label:has(+ .form) {
@@ -41,6 +50,7 @@ form {
   column-gap: 2em;
   align-items: flex-end;
   justify-content: space-between;
+  margin-bottom: 0;
 }
 
 .input-group {
