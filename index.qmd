@@ -418,7 +418,7 @@ ForceGraph({nodes: ntf, links: ltf}, {
   colors: d3.schemeCategory10.slice(0, nodeGroups.length),
   linkStrokeWidth: l => l.w,
   repulsion: -100,
-  width: 1200,
-  height: 850
+  width: 1250,
+  height: 750
 })
 ```
